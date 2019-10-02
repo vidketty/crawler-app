@@ -2,7 +2,6 @@ const express = require('express')
 const app = express()
 const Crawler = require("crawler");
 let $;
-// = require("jquery");
 
 const c = new Crawler({
 	maxConnections: 10,
@@ -20,41 +19,21 @@ const c = new Crawler({
 	}
 });
 
-let cache = []
-const JSONStringifyCallback = (key, value) => {
-	if (typeof value === 'object' && value !== null) {
-		if (cache.indexOf(value) !== -1) {
-			// Duplicate reference found, discard key
-			return;
-		}
-		// Store value in our collection
-		cache.push(value);
-	}
-	return value;
-}
-
 const doCrawling = (req, res) => {
 	c.queue([{
-		uri: 'https://www.npmjs.com/package/express',
+		uri: 'https://www.chevron.com',
 
 		// The global callback won't be called
-		callback: function (error, response, done) {
+		callback: async (error, response, done) => {
 			$ = response.$;
 			if (error) {
 				console.log(error);
 			} else {
-
-				getPageLinks(response.body, "a", /<a\s+(?:[^>]*?\s+)?href=(["'])(.*?)\1/, async (links, parsedPages) => {
-					const allLinks = [...JSON.parse(JSON.stringify(links, JSONStringifyCallback))];
-					const allParsedPages = [...JSON.parse(JSON.stringify(parsedPages, JSONStringifyCallback))]
-					const allLinksArray = Object.keys(allLinks).filter((tag, index) => index)
-					for (let idx = 0; idx < 10; i++) {
-
-					}
-					res.send({
-						links: allLinks,
-						parsedPages: allParsedPages
-					})
+				let bodyStr = response.body;
+				let links = []
+				links = await getLinks(bodyStr, links);
+				res.send({
+					links
 				})
 			}
 			done();
@@ -62,21 +41,20 @@ const doCrawling = (req, res) => {
 	}]);
 }
 
-
-const getPageLinks = async (data, selector, regex, callback) => {
-	let parsedPages = [];
-	let url = '';
-	var links = await $(selector, data)				// jquery context is our response data
-		.filter(function () {
-			return this.href.match(regex);      // without an href matching our regex
-		})
-
-	if (url.lastIndexOf('?') != -1) {
-		url = url.substr(0, url.lastIndexOf('?')); // some weird querystring gets added i don't want
-	}
-
-	parsedPages.push(url);  			// watchin' our tracks
-	callback(links, parsedPages);
+const getLinks = async (bodyStr, links) => {
+	$(bodyStr).find("a[href!='javascript:void(0)']").each(((index, element) => {
+		console.log(index, $(element).attr('href'));
+		const link = $(element).attr('href');
+		if (
+			links.indexOf(link) === -1
+			&& link.indexOf('#') !== 0
+			&& link.indexOf('http://') === -1
+			&& link.indexOf('https://') === -1
+		) {
+			links.push(link);
+		}
+	}));
+	return links;
 }
 
 app.get('/', (req, res) => { res.send('Hello World') })
