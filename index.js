@@ -4,16 +4,17 @@ const Crawler = require("crawler");
 let $;
 
 const c = new Crawler({
-	maxConnections: 10,
+	rateLimit: 100,
+    maxConnections: 1,
 	// This will be called for each crawled page
 	callback: function (error, res, done) {
 		if (error) {
-			console.log(error);
+			console.log('12--error>>>>>>', error);
 		} else {
 			var $ = res.$;
 			// $ is Cheerio by default
 			//a lean implementation of core jQuery designed specifically for the server
-			console.log($("title").text());
+			console.log('17--res-->>>', $("title").text());
 		}
 		done();
 	}
@@ -27,16 +28,16 @@ const doCrawling = (req, res) => {
 		callback: async (error, response, done) => {
 			$ = response.$;
 			if (error) {
-				console.log(error);
+				console.log('30--error>>>>>>>>>>>>>', error);
 			} else {
 				let bodyStr = response.body;
 				let links = [], pages = [];
 				links = await getLinks(bodyStr, links);
 				pages = await getLinksPages(links);
 				res.send({
-					links,
-					pages
-				})
+					links: links,
+					mathcedPages: pages
+				});
 			}
 			done();
 		}
@@ -60,51 +61,37 @@ const getLinks = async (bodyStr, links) => {
 }
 
 const getLinksPages = async (links) => {
+	// console.log('63---links: ', links, typeof links);
+	// console.log('64---links: ', links[0], typeof links[0]);
 	let matchedWordPages = [];
-	const reviewedLinks = []
-	const queue = [];
-	return new Promise((reject ,resolve) => {
-		for(let i = 0; i < links.length; i++) {
-			const link = links[i];
-			queue.push({
-				uri: `https://www.chevron.com${link}`,
-				jQuery: false,
-				// The global callback won't be called
-				callback: async (error, response, done) => {
-					if (error) {
-						console.log(error);
-					} else {
-						let bodyString = response.body;
-						const hasWord = await findMatchWord(bodyString);
-						if(hasWord) {
-							matchedWordPages.push(`https://www.chevron.com/${link}`)
-						}
-					}
-					reviewedLinks.push(`https://www.chevron.com/${link}`);
-					if(reviewedLinks.length === [...links].length){
-						resolve(matchedWordPages)
-					}
-					done();
+
+	$(links).each((index, link) => {
+		// console.log('67---index, link: ', index, link);
+		c.queue([{
+			uri: `https://www.chevron.com${link}`,
+	
+			// The global callback won't be called
+			callback: async (error, response, done) => {
+				$ = response.$;
+				if (error) {
+					console.log('74--error>>>>>>>>>>>>>', error);
+				} else {
+					let bodyString = response.body;
+					matchedWordPages = await findMatchWord(`https://www.chevron.com${link}`, bodyString, matchedWordPages);
 				}
-			});
-		}
-		c.queue(queue)
-	})
+				done();
+			}
+		}]);
+	});
+	return matchedWordPages;
 }
 
-const findMatchWord = async(bodyString, matchedWordPages) => {
-	return bodyString.toLowerCase().indexOf('iot') !== -1;
-	// $(bodyString).find("p").each(((index, element) => {
-	// 	console.log('91---element: ', element);
-	// 	if(element && element.children && element.children.length && element.children[0].data) {
-	// 		console.log('92---element.children[0].data: ', element.children[0].data);
-	// 		// Inside this if we will get the matched IoT element p tag of the page
-	// 		if(element.children[0].data.includes("IoT")) {
-	// 			console.log('94->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>String Contains IOT-----');
-	// 		}
-	// 	}
-	// }));
-	// return matchedWordPages;
+const findMatchWord = async(pageLink, bodyString, matchedWordPages) => {
+	if(bodyString.toLowerCase().indexOf("iot") !== -1) {
+		matchedWordPages.push(pageLink);
+	}
+	console.log('0000------->>matchedWordPages: ', matchedWordPages);
+	return matchedWordPages;
 }
 
 app.get('/', (req, res) => { res.send('Hello World') })
